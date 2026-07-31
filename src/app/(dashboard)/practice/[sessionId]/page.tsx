@@ -118,7 +118,7 @@ export default function PracticeSessionPage({ params }: { params: { sessionId: s
       isCorrect = Array.isArray(answer) && [...answer].sort().join() === correct.join();
     } else if (q.question_type === 'NAT') {
       const [min, max] = Array.isArray(q.correct_key) ? q.correct_key : [0, 0];
-      isCorrect = typeof answer === 'number' && answer >= min && answer <= max;
+      isCorrect = typeof answer === 'number' && answer >= Number(min) && answer <= Number(max);
     }
 
     const status = isCorrect ? 'correct' : 'incorrect';
