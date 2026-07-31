@@ -1,5 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* ═══════════════════════════════════════════════════════
    MARKS-STYLE DESIGN SYSTEM — GATE AIR-1 ENGINE
    Palette: Deep navy-black bg · Blue-indigo accent · Clean cards
