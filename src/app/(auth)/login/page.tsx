@@ -124,28 +124,10 @@ export default function LoginPage() {
         {loading ? 'Signing in…' : 'Login With Google'}
       </motion.button>
 
-      {/* ── Divider ── */}
-      <motion.div
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}
-        className="flex items-center gap-3 w-full max-w-xs my-4"
-      >
-        <div className="flex-1 h-px bg-gray-200" />
-        <span className="text-xs text-gray-400">or</span>
-        <div className="flex-1 h-px bg-gray-200" />
-      </motion.div>
-
-      {/* ── Email link ── */}
-      <motion.a
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9 }}
-        href="/signup"
-        className="text-sm text-gray-500 hover:text-[#5B6EF5] transition-colors"
-      >
-        Sign up with email instead →
-      </motion.a>
-
       <p className="text-xs text-gray-400 mt-8 text-center max-w-xs">
         By continuing you agree to our Terms of Service and Privacy Policy.
       </p>
     </div>
   );
 }
+

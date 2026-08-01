@@ -1,141 +1,74 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Zap, Mail, Lock, User, ArrowRight, Eye, EyeOff, BookOpen } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import toast from 'react-hot-toast';
 
 export default function SignupPage() {
-  const router = useRouter();
-  const supabase = createClient();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [gateYear, setGateYear] = useState('2025');
-  const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const supabase = createClient();
 
-  async function handleSignup(e: React.FormEvent) {
-    e.preventDefault();
-    if (password.length < 8) { toast.error('Password must be at least 8 characters'); return; }
+  async function handleGoogleLogin() {
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: name, gate_year: parseInt(gateYear) } },
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${location.origin}/auth/callback` },
     });
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success('Account created! Check your email to confirm.');
-      router.push('/login');
-    }
-    setLoading(false);
+    if (error) { console.error(error); setLoading(false); }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden py-8">
-      <div className="absolute inset-0 bg-background" />
-      <div className="absolute top-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-emerald-500/5 blur-[80px] pointer-events-none" />
-      <div className="absolute bottom-1/4 left-1/4 w-[300px] h-[300px] rounded-full bg-amber-500/5 blur-[80px] pointer-events-none" />
-
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4">
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="relative z-10 w-full max-w-md px-4"
+        className="text-center w-full max-w-xs"
       >
-        <div className="text-center mb-8">
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
-            className="inline-flex items-center gap-2 mb-4"
-          >
-            <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)]">
-              <Zap className="w-5 h-5 text-white" fill="white" />
-            </div>
-            <span className="text-xl font-bold text-gradient">GATE AIR-1</span>
-          </motion.div>
-          <h1 className="text-2xl font-bold text-foreground">Start your AIR-1 journey</h1>
-          <p className="text-sm text-muted-foreground mt-1">Free forever. No credit card needed.</p>
-        </div>
+        {/* Logo */}
+        <motion.div
+          initial={{ scale: 0.8 }} animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 200, delay: 0.1 }}
+          className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-xl mx-auto mb-6"
+          style={{ background: 'linear-gradient(135deg, #5B6EF5, #818cf8)' }}
+        >
+          <span className="text-white font-black text-2xl tracking-tight">G</span>
+        </motion.div>
 
-        <div className="glass-card p-8">
-          <form onSubmit={handleSignup} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1.5" htmlFor="signup-name">Full name</label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input id="signup-name" type="text" value={name} onChange={e => setName(e.target.value)}
-                  placeholder="Your name" required
-                  className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-muted border border-border text-sm
-                             text-foreground placeholder-muted-foreground
-                             focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition-all"
-                />
-              </div>
-            </div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-1">Get started</h1>
+        <p className="text-gray-400 text-sm mb-8">
+          25 years of GATE CSE PYQs · AI analytics · Spaced repetition
+        </p>
 
-            <div>
-              <label className="block text-sm font-medium mb-1.5" htmlFor="signup-email">Email address</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input id="signup-email" type="email" value={email} onChange={e => setEmail(e.target.value)}
-                  placeholder="you@example.com" required
-                  className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-muted border border-border text-sm
-                             text-foreground placeholder-muted-foreground
-                             focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition-all"
-                />
-              </div>
-            </div>
+        <motion.button
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+          onClick={handleGoogleLogin}
+          disabled={loading}
+          id="google-signup-btn"
+          className="flex items-center gap-3 px-8 py-4 rounded-2xl font-semibold text-white text-base w-full justify-center transition-all"
+          style={{ background: loading ? '#818cf8' : '#5B6EF5' }}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          {loading ? (
+            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <path fill="white" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="white" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="white" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="white" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+          )}
+          {loading ? 'Signing in…' : 'Continue with Google'}
+        </motion.button>
 
-            <div>
-              <label className="block text-sm font-medium mb-1.5" htmlFor="signup-password">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input id="signup-password" type={showPass ? 'text' : 'password'} value={password}
-                  onChange={e => setPassword(e.target.value)} placeholder="Min 8 characters" required
-                  className="w-full pl-10 pr-10 py-2.5 rounded-lg bg-muted border border-border text-sm
-                             text-foreground placeholder-muted-foreground
-                             focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition-all"
-                />
-                <button type="button" onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1.5" htmlFor="signup-gate-year">
-                <BookOpen className="inline w-3.5 h-3.5 mr-1 text-muted-foreground" />
-                GATE target year
-              </label>
-              <select id="signup-gate-year" value={gateYear} onChange={e => setGateYear(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-lg bg-muted border border-border text-sm text-foreground
-                           focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition-all">
-                {[2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </div>
-
-            <button id="signup-submit" type="submit" disabled={loading}
-              className="w-full py-2.5 px-4 rounded-lg bg-emerald-500 hover:bg-emerald-400
-                         text-white text-sm font-semibold flex items-center justify-center gap-2
-                         transition-all duration-200 disabled:opacity-50 mt-2
-                         shadow-[0_0_20px_rgba(16,185,129,0.25)] hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]"
-            >
-              {loading ? <div className="spinner w-4 h-4" /> : <> Create account <ArrowRight className="w-4 h-4" /> </>}
-            </button>
-          </form>
-
-          <p className="text-center text-sm text-muted-foreground mt-6">
-            Already have an account?{' '}
-            <Link href="/login" className="text-emerald-400 hover:text-emerald-300 font-medium">Sign in</Link>
-          </p>
-        </div>
+        <p className="text-xs text-gray-400 mt-6">
+          Already have an account? Just click the button above — Google handles both sign up and sign in automatically.
+        </p>
+        <p className="text-xs text-gray-300 mt-4">
+          By continuing you agree to our Terms of Service and Privacy Policy.
+        </p>
       </motion.div>
     </div>
   );
