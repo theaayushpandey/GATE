@@ -4,16 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import { InlineMath, BlockMath } from 'react-katex';
 import 'katex/dist/katex.min.css';
 
-interface Props { stem: string }
+interface Props { stem: string; imageUrl?: string | null }
 
 /**
- * Renders question stem with:
+ * Renders question stem with optional page image (for diagrams/tables).
  * - Inline math: $...$
  * - Block math: $$...$$
  * - Code blocks: ```lang\n...\n```
  * - Markdown: **bold**, *italic*, `code`, tables, lists
  */
-export function QuestionRenderer({ stem }: Props) {
+export function QuestionRenderer({ stem, imageUrl }: Props) {
   const [highlighted, setHighlighted] = useState<Map<string, string>>(new Map());
 
   // Extract and highlight code blocks server-side via API
@@ -28,6 +28,20 @@ export function QuestionRenderer({ stem }: Props) {
 
   return (
     <div className="prose prose-invert max-w-none mb-6">
+      {imageUrl && (
+        <div className="mb-4 rounded-xl overflow-hidden border border-border">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageUrl}
+            alt="Question diagram"
+            className="w-full object-contain max-h-[480px]"
+            style={{ background: '#fff' }}
+          />
+          <p className="text-[10px] text-center text-muted-foreground py-1 bg-muted">
+            📄 Question includes a diagram — refer to the image above
+          </p>
+        </div>
+      )}
       <div className="text-[15px] leading-relaxed text-foreground space-y-3">
         {segments.map((seg, i) => <Segment key={i} segment={seg} />)}
       </div>

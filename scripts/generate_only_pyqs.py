@@ -1,223 +1,203 @@
-import os
 import re
 import json
 import uuid
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-raw_txt_path = os.path.join(script_dir, 'raw_pdf.txt')
-out_path = os.path.join(os.path.dirname(script_dir), 'supabase', 'new_pyqs_only.sql')
-
-with open(raw_txt_path, 'r', encoding='utf-8') as f:
-    text = f.read()
-
-# Known subjects to IDs
-subject_map = {
-    'operating system': 'ef85032b-b527-4fd1-9e59-bcfb661899b7',
-    'computer network': 'bde844c3-78ee-48bf-a033-254618acea82',
-    'database management system': 'b09dadc8-c1f3-4907-b1b4-c1243464a76d',
-    'dbms': 'b09dadc8-c1f3-4907-b1b4-c1243464a76d',
-    'computer organization and architecture': '78df9cae-d196-43d2-9812-95c96d79bb3d',
-    'cso': '78df9cae-d196-43d2-9812-95c96d79bb3d',
-    'discrete mathematics': 'fbc320d1-98a9-4976-80ad-55dc409d707e',
-    'compiler': '34d0b075-1e3d-4999-ba4b-490c6f1f92db',
-    'toc': '84ec0471-4e55-4c5f-8e90-6ff65877a945',
-    'ada': '54802f83-d684-47b3-98f3-551195d34d45',
-    'digital': '6d3d5627-affe-4c91-bd0d-c5249470b220'
+# ── Subject name keywords to match against subjects.name in DB ──────────────
+# We'll use SQL subqueries so UUIDs don't need to be hardcoded
+SUBJECT_NAME_LIKE = {
+    'os':   'Operating Systems',
+    'cn':   'Computer Networks',
+    'dbms': 'Database Management',
+    'coa':  'Computer Organization',
+    'toc':  'Theory of Computation',
+    'cd':   'Compiler Design',
+    'algo': 'Algorithms',
+    'pds':  'Programming',
+    'dl':   'Digital Logic',
+    'dm':   'Discrete Mathematics',
+    'em':   'Engineering Mathematics',
 }
 
-lines = text.split('\n')
-answer_keys = {}
+# ── How to detect a subject section from a line ─────────────────────────────
+def detect_subject(line: str) -> str | None:
+    l = line.strip().lower()
+    if re.match(r'^operating system', l):           return 'os'
+    if re.match(r'^computer network', l):           return 'cn'
+    if re.match(r'^database management|^dbms', l):  return 'dbms'
+    if re.match(r'^computer organization', l):      return 'coa'
+    if re.match(r'^theory of computation|^toc', l): return 'toc'
+    if re.match(r'^compiler design', l):            return 'cd'
+    if re.match(r'^algorithm', l):                  return 'algo'
+    if re.match(r'^programming', l):                return 'pds'
+    if re.match(r'^digital logic', l):              return 'dl'
+    if re.match(r'^discrete math', l):              return 'dm'
+    if re.match(r'^engineering math', l):           return 'em'
+    return None
 
+import os
+script_dir = os.path.dirname(os.path.abspath(__file__))
+raw_path   = os.path.join(script_dir, 'raw_pdf.txt')
+out_path   = os.path.join(os.path.dirname(script_dir), 'supabase', 'new_pyqs_only.sql')
+
+with open(raw_path, encoding='utf-8') as f:
+    raw_lines = f.readlines()
+
+# ── First pass: find where each subject section starts ─────────────────────
+# A subject header appears as a standalone short line, not inside a question
+section_starts = []   # list of (line_index, subject_key)
+for i, line in enumerate(raw_lines):
+    s = detect_subject(line)
+    if s:
+        # Make sure this isn't mid-sentence (keep only short header lines)
+        stripped = line.strip()
+        if len(stripped) < 60:
+            section_starts.append((i, s))
+
+# Remove duplicate consecutive same-subject entries (answer-key sections repeat the name)
+deduped = []
+prev_subj = None
+for idx, subj in section_starts:
+    if subj != prev_subj:
+        deduped.append((idx, subj))
+        prev_subj = subj
+
+print("Section boundaries detected:")
+for idx, subj in deduped:
+    print(f"  line {idx+1}: {subj}")
+
+# ── Build a lookup: for any line number → subject key ──────────────────────
+def get_subject_at(line_no: int) -> str:
+    current = 'os'   # default
+    for idx, subj in deduped:
+        if idx <= line_no:
+            current = subj
+        else:
+            break
+    return current
+
+# ── Patterns ────────────────────────────────────────────────────────────────
+Q_PAT    = re.compile(r'^Q(\d+)\.\s+(.*)')
+OPT_PAT  = re.compile(r'^\(([a-d])\)\s+(.*)', re.I)
+META_PAT = re.compile(r'\[Marks:\s*(\d*)\s*\]\[GATE:\s*(\d{4})\]', re.I)
+
+# ── Second pass: parse questions ────────────────────────────────────────────
+questions = []
+current_q = None
 in_answer_section = False
-key_header_pattern = re.compile(r'(.*?)\s+PYQs?\s+Answer\s+key', re.IGNORECASE)
-ans_line_pattern = re.compile(r'(\d+)\.\s*([A-Za-z0-9.\-]+)')
 
-def clean_topic(name):
-    if not name: return "GENERAL"
-    return re.sub(r'[^A-Z0-9]', '', name.upper())
+for i, raw_line in enumerate(raw_lines):
+    line = raw_line.rstrip('\n').rstrip('\r')
+    stripped = line.strip()
 
-for line in lines:
-    line_clean = line.strip()
-    if not line_clean:
+    # Skip empty lines
+    if not stripped:
         continue
-    
-    if 'PYQ Questions Booklet' in line_clean or 'PYQ Questions' in line_clean:
+
+    # Detect answer-key blocks (e.g. "Operating System\nPROCESS & THREAD...\n1. C 2. D ...")
+    # Answer key sections follow the pattern "N. X" repeated across a line
+    if re.match(r'^\d+\.\s+[A-Z0-9.]+(\s+\d+\.\s+[A-Z0-9.]+)+', stripped):
+        in_answer_section = True
+        continue
+    if re.match(r'^(PROCESS|THREAD|SYNCHRON|DEADLOCK|MEMORY|FILE|CACHE|PIPELINE|INSTRUCTION|ARITHMETIC|NETWORK|TRANSPORT|APPLICATION|LINK|PHYSICAL|ER MODEL|RELATIONAL|SQL|TRANSACTION|AUTOMATA|GRAMMAR|TURING|PARSING|CODE GEN|SORTING|GRAPH|GREEDY|DYNAMIC|DIVIDE|PROPOSITIONAL|SET|RELATION|COMBINAT|PROBABILITY|LINEAR|CALCULUS|DIFFERENTIAL|C PROG|RECURSION|POINTER)', stripped, re.I):
         in_answer_section = False
         continue
+    # Reset answer section when we hit a new question
+    if Q_PAT.match(stripped):
+        in_answer_section = False
 
-    m_header = key_header_pattern.search(line_clean)
-    if m_header:
-        in_answer_section = True
-        sub_str = m_header.group(1).strip().lower()
-        
-        current_ans_subject = None
-        for sub, sid in subject_map.items():
-            if sub in sub_str or sub_str in sub:
-                current_ans_subject = sid
-                break
-        
-        if not current_ans_subject:
-            for sub, sid in subject_map.items():
-                if sub in line_clean.lower():
-                    current_ans_subject = sid
-                    break
-
-        if current_ans_subject:
-            if current_ans_subject not in answer_keys:
-                answer_keys[current_ans_subject] = {}
-            current_ans_topic = "GENERAL"
-            if current_ans_topic not in answer_keys[current_ans_subject]:
-                answer_keys[current_ans_subject][current_ans_topic] = {}
-        continue
-        
-    if in_answer_section and current_ans_subject:
-        answers_found = list(ans_line_pattern.finditer(line_clean))
-        if answers_found:
-            for m in answers_found:
-                q_num = int(m.group(1))
-                ans_val = m.group(2).upper()
-                answer_keys[current_ans_subject][current_ans_topic][q_num] = ans_val
-        else:
-            if len(line_clean) > 3 and not line_clean.isdigit():
-                if "GATE" not in line_clean and "Marks" not in line_clean:
-                    current_ans_topic = clean_topic(line_clean)
-                    if current_ans_topic not in answer_keys[current_ans_subject]:
-                        answer_keys[current_ans_subject][current_ans_topic] = {}
-
-questions = []
-current_subject = None
-current_topic = None
-current_q = None
-
-q_pattern = re.compile(r'^Q(\d+)\.\s*(.*)')
-opt_pattern = re.compile(r'^\(([a-d])\)\s*(.*)', re.IGNORECASE)
-marks_pattern = re.compile(r'\[Marks:\s*(\d*)\s*\]\[GATE:\s*(\d{4})\]')
-topic_pattern = re.compile(r'^[A-Z\s&+\-]{5,}$')
-
-in_answer_section_pass2 = False
-
-for line in lines:
-    line_clean = line.strip()
-    if not line_clean:
-        continue
-        
-    if key_header_pattern.search(line_clean):
-        in_answer_section_pass2 = True
-        
-    if in_answer_section_pass2:
-        if "PYQ Questions Booklet" in line_clean:
-            in_answer_section_pass2 = False
+    if in_answer_section:
         continue
 
-    lower_line = line_clean.lower()
-    if 'booklet' in lower_line:
-        for sub, sid in subject_map.items():
-            if sub in lower_line:
-                current_subject = sid
-                current_topic = "GENERAL"
-                break
-        continue
-
-    if topic_pattern.match(line_clean) and "Q1" not in line_clean and not "GATE" in line_clean:
-        current_topic = clean_topic(line_clean)
-        continue
-
-    m_q = q_pattern.match(line_clean)
+    # Detect new question
+    m_q = Q_PAT.match(stripped)
     if m_q:
         if current_q:
             questions.append(current_q)
-        
-        q_num = int(m_q.group(1))
-        
+        subj_key = get_subject_at(i)
         current_q = {
-            'subject_id': current_subject,
-            'topic': current_topic,
-            'q_num': q_num,
-            'text': m_q.group(2) + '\n',
-            'options': {},
-            'marks': 1,
-            'year': 2020,
-            'correct_key': None
+            'subj_key':   subj_key,
+            'q_num':      int(m_q.group(1)),
+            'text':       m_q.group(2) + '\n',
+            'options':    {},
+            'marks':      1,
+            'year':       2020,
         }
-        
-        if current_subject and current_subject in answer_keys:
-            topic_dict = answer_keys[current_subject]
-            if current_topic in topic_dict and q_num in topic_dict[current_topic]:
-                current_q['correct_key'] = topic_dict[current_topic][q_num]
-            else:
-                for t, ans_dict in topic_dict.items():
-                    if q_num in ans_dict:
-                        current_q['correct_key'] = ans_dict[q_num]
-                        break
         continue
-    
-    if current_q:
-        m_opt = opt_pattern.match(line_clean)
-        if m_opt:
-            opt_letter = m_opt.group(1).upper()
-            current_q['options'][opt_letter] = m_opt.group(2)
-        else:
-            m_marks = marks_pattern.search(line_clean)
-            if m_marks:
-                marks_val = m_marks.group(1)
-                if marks_val:
-                    current_q['marks'] = int(marks_val)
-                current_q['year'] = int(m_marks.group(2))
-                line_clean = marks_pattern.sub('', line_clean)
-            
-            inline_opts = list(re.finditer(r'\(([a-d])\)\s*([^()]+)', line_clean, re.IGNORECASE))
-            if inline_opts:
-                for opt in inline_opts:
-                    opt_letter = opt.group(1).upper()
-                    current_q['options'][opt_letter] = opt.group(2).strip()
-            else:
-                current_q['text'] += line_clean + '\n'
+
+    if current_q is None:
+        continue
+
+    # Detect option
+    m_opt = OPT_PAT.match(stripped)
+    if m_opt:
+        current_q['options'][m_opt.group(1).upper()] = m_opt.group(2).strip()
+        continue
+
+    # Detect marks/year metadata
+    m_meta = META_PAT.search(stripped)
+    if m_meta:
+        marks_str = m_meta.group(1)
+        year_str  = m_meta.group(2)
+        if marks_str.isdigit():
+            m_val = int(marks_str)
+            current_q['marks'] = m_val if m_val in (1, 2) else 1
+        try:
+            yr = int(year_str)
+            if 2000 <= yr <= 2025:
+                current_q['year'] = yr
+        except:
+            pass
+        # Also scrape inline options from the same line (e.g. "(a) X  (b) Y  (c) Z  (d) W")
+        rest = META_PAT.sub('', stripped).strip()
+        for m in re.finditer(r'\(([a-d])\)\s*([^()]+)', rest, re.I):
+            current_q['options'][m.group(1).upper()] = m.group(2).strip()
+        continue
+
+    # Append to question text
+    current_q['text'] += stripped + '\n'
 
 if current_q:
     questions.append(current_q)
 
-fallback_subject = 'ef85032b-b527-4fd1-9e59-bcfb661899b7'
+# ── Summary by subject ────────────────────────────────────────────────────
+from collections import Counter
+by_subj = Counter(q['subj_key'] for q in questions)
+print("\nQuestions per subject:")
+for k, v in sorted(by_subj.items()):
+    print(f"  {k:6s}: {v}")
+print(f"  TOTAL: {len(questions)}")
 
-sql_statements = []
-sql_statements.append("INSERT INTO questions (id, subject_id, gate_year, marks, question_type, question_stem, options_json, correct_key, detailed_solution) VALUES\n")
+# ── Generate SQL ──────────────────────────────────────────────────────────
+def esc(s: str) -> str:
+    return s.replace("'", "''")
 
 values = []
 for q in questions:
-    q_id = str(uuid.uuid4())
-    sub_id = q['subject_id'] if q['subject_id'] else fallback_subject
-    
-    # Clamp year to valid GATE range
-    year = q.get('year', 2020)
-    if not isinstance(year, int) or year < 1990 or year > 2025:
-        year = 2020
-    
-    # Clamp marks to only 1 or 2 (DB constraint)
-    marks = q.get('marks', 1)
-    if marks not in (1, 2):
-        marks = 1
-    
-    stem = q['text'].replace("'", "''").strip()
-    if not stem:
-        stem = "Question text missing"
-        
-    opts = q.get('options', {})
-    if not opts:
-        opts = {"A": "Option A", "B": "Option B", "C": "Option C", "D": "Option D"}
-    opts_json = json.dumps(opts).replace("'", "''")
-    
-    correct = q['correct_key']
-    if correct:
-        correct = f'"{correct}"'
-    else:
-        correct = '"A"'
-    
-    val = f"  ('{q_id}', '{sub_id}', {year}, {marks}, 'MCQ', '{stem}', '{opts_json}', '{correct}', 'Detailed solution not parsed from OCR yet.')"
-    values.append(val)
+    qid      = str(uuid.uuid4())
+    subj_key = q['subj_key']
+    subj_name = SUBJECT_NAME_LIKE[subj_key]
+    year     = q['year']
+    marks    = q['marks']
+    stem     = esc(q['text'].strip()) or 'Question text missing'
+    opts     = q['options'] if q['options'] else {"A":"Option A","B":"Option B","C":"Option C","D":"Option D"}
+    opts_j   = esc(json.dumps(opts))
+    correct  = '"A"'   # answer keys not parsed in this pass
 
-sql_statements.append(",\n".join(values) + "\nON CONFLICT (id) DO NOTHING;\n")
+    # Use subquery to get subject_id by name — no hardcoded UUIDs
+    sub_select = f"(SELECT id FROM subjects WHERE name ILIKE '%{subj_name}%' LIMIT 1)"
+
+    values.append(
+        f"  ('{qid}', {sub_select}, {year}, {marks}, 'MCQ', '{stem}', '{opts_j}', '{correct}', 'Detailed solution pending.')"
+    )
+
+sql = "-- Delete old misassigned questions, keep any the user has already answered\n"
+sql += "DELETE FROM questions WHERE id NOT IN (SELECT question_id FROM user_progress);\n\n"
+sql += "INSERT INTO questions (id, subject_id, gate_year, marks, question_type, question_stem, options_json, correct_key, detailed_solution) VALUES\n"
+sql += ",\n".join(values)
+sql += "\nON CONFLICT (id) DO NOTHING;\n"
 
 with open(out_path, 'w', encoding='utf-8') as f:
-    f.writelines(sql_statements)
+    f.write(sql)
 
-print(f"Generated {out_path} with {len(values)} questions.")
+print(f"\nWrote {out_path}  ({len(values)} questions)")
 

@@ -271,7 +271,7 @@ export default function PracticeSessionPage({ params }: { params: { sessionId: s
                     )}
                   </div>
 
-                  <QuestionRenderer stem={currentQuestion.question_stem} />
+                  <QuestionRenderer stem={currentQuestion.question_stem} imageUrl={(currentQuestion as any).image_url} />
                   <AnswerPanel
                     question={currentQuestion}
                     onAnswerChange={setAnswer}
