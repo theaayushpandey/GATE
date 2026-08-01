@@ -15,7 +15,7 @@ export default async function RevisionPage() {
       .select('*, subjects(name, color_hex, short_name)')
       .eq('user_id', user.id)
       .order('next_revision_date'),
-    supabase.from('subjects').select('id, name, short_name, color_hex').order('display_order'),
+    supabase.from('subjects').select('*').order('display_order'),
   ]);
 
   return (

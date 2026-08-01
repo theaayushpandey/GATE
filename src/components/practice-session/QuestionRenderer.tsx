@@ -18,7 +18,7 @@ export function QuestionRenderer({ stem }: Props) {
 
   // Extract and highlight code blocks server-side via API
   useEffect(() => {
-    const codeBlocks = [...stem.matchAll(/```(\w+)?\n([\s\S]*?)```/g)];
+    const codeBlocks = Array.from(stem.matchAll(/```(\w+)?\n([\s\S]*?)```/g));
     if (!codeBlocks.length) return;
     // We'll render with basic styling; Shiki needs server-side
     // In production, use a route handler to syntax-highlight

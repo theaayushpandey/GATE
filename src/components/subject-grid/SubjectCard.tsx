@@ -1,4 +1,5 @@
 'use client';
+import React from 'react';
 
 import { motion } from 'framer-motion';
 import { Calculator, GitBranch, Cpu, Server, Code2, Zap, Infinity, Wrench, Layers, Database, Network, TrendingUp, Award, Clock, BookOpen } from 'lucide-react';
@@ -7,7 +8,7 @@ import type { Subject, SubjectGRS } from '@/types';
 import { GRS_BADGE_CONFIG } from '@/lib/grs/calculator';
 
 // Static subject icon map
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   Calculator, GitBranch, Cpu, Server, Code2, Zap, Infinity, Wrench, Layers, Database, Network,
 };
 
