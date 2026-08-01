@@ -236,7 +236,7 @@ export function SubjectHub({ subject, chapters, progressMap }: Props) {
                             {chapter.topics?.map((topic: any, ti: number) => {
                               const tQs = topic.questions ?? [];
                               const tDone = tQs.filter((q: any) => progressMap.has(q.id)).length;
-                              const years = Array.from(new Set(tQs.map((q: any) => q.gate_year))).sort().reverse().slice(0, 4);
+                              const years = Array.from(new Set<number>(tQs.map((q: any) => q.gate_year as number))).sort().reverse().slice(0, 4);
                               return (
                                 <div key={topic.id} className="flex items-center gap-3 px-5 py-3 hover:opacity-90 transition-opacity"
                                   style={{ borderTop: ti > 0 ? '1px solid var(--border)' : 'none' }}>
@@ -246,7 +246,7 @@ export function SubjectHub({ subject, chapters, progressMap }: Props) {
                                       {years.map(y => (
                                         <span key={String(y)} className="text-[10px] px-1.5 py-0.5 rounded font-mono"
                                           style={{ background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
-                                          {y}
+                                          {String(y)}
                                         </span>
                                       ))}
                                       <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{tQs.length} Qs</span>
